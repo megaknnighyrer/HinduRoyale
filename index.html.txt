@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clash of Concepts – Hindu Edition</title>
+<style>
+  body {
+    font-family: 'Trebuchet MS', sans-serif;
+    background: linear-gradient(to bottom, #ffe6cc, #ffcc80);
+    text-align: center;
+    margin: 0;
+    padding: 0;
+  }
+  h1 {
+    color: #6a1b9a;
+    padding: 10px;
+  }
+  #battlefield {
+    width: 80%;
+    height: 300px;
+    margin: 20px auto;
+    border: 3px solid #6a1b9a;
+    border-radius: 10px;
+    background: #f3e5f5;
+    position: relative;
+    overflow: hidden;
+  }
+  .unit {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 60px;
+    color: white;
+    font-weight: bold;
+    position: absolute;
+  }
+  .player {
+    background: #8e24aa;
+    left: 10px;
+  }
+  .enemy {
+    background: #ff7043;
+    right: 10px;
+  }
+  #controls {
+    margin: 20px;
+  }
+  button {
+    background: #6a1b9a;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 8px;
+    margin: 5px;
+    cursor: pointer;
+  }
+  button:hover {
+    background: #9c27b0;
+  }
+  #status {
+    margin-top: 20px;
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+
+<h1>⚔️ Clash of Concepts: Hindu Edition ⚔️</h1>
+
+<div id="battlefield"></div>
+
+<div id="controls">
+  <p>Velg et konsept for å angripe eller forsvare:</p>
+  <button onclick="playCard('Dharma')">🕉️ Dharma (Rett handling)</button>
+  <button onclick="playCard('Karma')">🔱 Karma (Handling & Konsekvens)</button>
+  <button onclick="playCard('Maya')">🌸 Maya (Illusjon)</button>
+  <button onclick="playCard('Atman')">🔥 Atman (Sjelen)</button>
+</div>
+
+<div id="status">Kampen begynner!</div>
+
+<script>
+let playerHP = 100;
+let enemyHP = 100;
+
+const battlefield = document.getElementById("battlefield");
+const statusEl = document.getElementById("status");
+
+function playCard(concept) {
+  const damage = Math.floor(Math.random() * 20) + 10;
+  const enemyDamage = Math.floor(Math.random() * 15) + 5;
+  
+  // Legg til enhets-ikon for spilleren
+  const unit = document.createElement("div");
+  unit.className = "unit player";
+  unit.style.top = Math.random() * 220 + "px";
+  unit.textContent = concept;
+  battlefield.appendChild(unit);
+  
+  // Legg til enhet for fienden
+  const enemy = document.createElement("div");
+  enemy.className = "unit enemy";
+  enemy.style.top = Math.random() * 220 + "px";
+  enemy.textContent = "Asura";
+  battlefield.appendChild(enemy);
+  
+  // Oppdater helse
+  enemyHP -= damage;
+  playerHP -= enemyDamage;
+
+  statusEl.innerHTML = `
+    Du brukte <b>${concept}</b> og påførte <b>${damage}</b> skade!<br>
+    Fienden svarte og påførte deg <b>${enemyDamage}</b> skade.<br>
+    <br>💜 Din HP: ${playerHP} | 🔥 Fiendens HP: ${enemyHP}
+  `;
+
+  // Sjekk vinn/tap
+  if (playerHP <= 0 || enemyHP <= 0) {
+    const result = playerHP > enemyHP ? "Du vant! 🕉️" : "Du tapte! ☠️";
+    statusEl.innerHTML += `<br><br><b>${result}</b>`;
+    document.querySelectorAll("button").forEach(btn => btn.disabled = true);
+  }
+
+  // Fjern enhetene etter litt tid
+  setTimeout(() => {
+    battlefield.removeChild(unit);
+    battlefield.removeChild(enemy);
+  }, 1500);
+}
+</script>
+
+</body>
+</html>
