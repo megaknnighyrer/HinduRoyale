@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Mythic Clash — inspirert av hinduistisk mytologi (demo)</title>
+<style>
+  :root{
+    --bg:#0f1724; --panel:#0b1220; --accent:#f59e0b; --muted:#94a3b8;
+    --card:#0b1320; --card-border:#334155;
+  }
+  html,body{height:100%; margin:0; font-family:Inter,Segoe UI,Roboto,system-ui,Arial; background:linear-gradient(180deg,#071027 0%, #0f1724 100%); color:#e6eef8}
+  .wrap{display:flex; gap:16px; padding:12px; box-sizing:border-box; max-width:1100px; margin:12px auto;}
+  .game{flex:1; background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent); border-radius:12px; padding:12px; min-height:560px; display:flex; flex-direction:column;}
+  header{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px}
+  h1{font-size:18px; margin:0}
+  .controls{display:flex; gap:8px; align-items:center}
+  .arena{flex:1; background:linear-gradient(180deg,#06324d66,#084a6a66); border-radius:10px; position:relative; overflow:hidden; border:1px solid rgba(255,255,255,0.03)}
+  .lane{position:absolute; left:0; right:0; height:100%; display:flex; align-items:center; justify-content:space-between; padding:0 16px; box-sizing:border-box}
+  .tower{width:70px; height:120px; border-radius:10px; background:linear-gradient(180deg,#0b1b2b,#072033); display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--muted); border:2px solid rgba(255,255,255,0.03)}
+  .tower .hp{font-weight:700}
+  .playerSide{left:0; top:50% ; transform:translateY(-50%);}
+  .enemySide{right:0; top:50%; transform:translateY(-50%);}
+  .middle{position:absolute; left:50%; top:0; transform:translateX(-50%); width:2px; height:100%; background:linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01))}
+  .unitsLayer{position:absolute; left:0; right:0; top:0; bottom:0; pointer-events:none;}
+  .ui{display:flex; gap:12px; align-items:center; padding:10px 2px; background:rgba(0,0,0,0.12); border-radius:10px}
+  .cardBar{display:flex; gap:8px; align-items:center}
+  .card{width:86px; height:110px; background:linear-gradient(180deg,var(--card),#071422); border-radius:8px; border:1px solid var(--card-border); padding:8px; box-sizing:border-box; cursor:pointer; user-select:none; display:flex; flex-direction:column; justify-content:space-between; pointer-events:auto}
+  .card.locked{opacity:.45; filter:grayscale(.2); cursor:not-allowed}
+  .card .emoji{font-size:34px; text-align:center}
+  .card .name{font-size:13px; text-align:center; color:#dbeafe}
+  .card .cost{font-weight:700; text-align:center; color:var(--accent)}
+  .elixir{font-size:14px; font-weight:700; color:var(--accent)}
+  .log{width:260px; background:rgba(10,12,20,0.5); border-radius:10px; padding:8px; font-size:13px; color:var(--muted)}
+  .footer{display:flex; justify-content:space-between; gap:8px; margin-top:10px}
+  /* unit visuals */
+  .unit{position:absolute; transform:translate(-50%,-50%); pointer-events:none; text-align:center; font-weight:700; color:#071022; padding:6px 8px; border-radius:999px; box-shadow:0 8px 20px rgba(2,6,23,0.6)}
+  .unit .lbl{font-size:13px}
+  .unit .hpbar{height:4px; width:40px; background:rgba(255,255,255,0.2); border-radius:2px; margin-top:4px}
+  .unit .hpinner{height:100%; width:100%; background:linear-gradient(90deg,#10b981,#84cc16); border-radius:2px}
+  /* colors by faction */
+  .ally{background:linear-gradient(180deg,#fef3c7,#fde68a); color:#123}
+  .enemy{background:linear-gradient(180deg,#fee2e2,#fecaca); color:#2b0b0b}
+  /* small screens */
+  @media (max-width:820px){
+    .wrap{flex-direction:column;padding:8px}
+    .log{width:100%}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="game" id="game">
+    <header>
+      <h1>Mythic Clash — demo (inspirert av hinduistisk mytologi)</h1>
+      <div class="controls">
+        <div class="elixir">Elixir: <span id="elixir">0</span> / 10</div>
+        <button id="restart">Restart</button>
+      </div>
+    </header>
+
+    <div class="arena" id="arena">
+      <div class="lane playerSide" style="top:65%">
+        <div class="tower" id="playerTower">
+          <div>Din Tårn</div>
+          <div class="hp" id="playerTowerHp">1000</div>
+        </div>
+      </div>
+      <div class="lane enemySide" style="top:35%">
+        <div class="tower" id="enemyTower">
+          <div>Fiende Tårn</div>
+          <div class="hp" id="enemyTowerHp">1000</div>
+        </div>
+      </div>
+      <div class="middle"></div>
+      <div class="unitsLayer" id="unitsLayer"></div>
+    </div>
+
+    <div class="footer">
+      <div class="ui cardBar" id="cardBar">
+        <!-- cards injected by JS -->
+      </div>
+
+      <div class="log" id="log">
+        <div><strong>Spilllog</strong></div>
+        <div id="logLines"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/*
+  Mythic Clash — simplified Clash Royale-like demo
+  - Single HTML file
+  - Cards deploy units that move horizontally and damage towers/units
+  - Respectful, archetype-based naming
+*/
+
+// Game configuration
+const CONFIG = {
+  arenaWidth: 900, // logical width for unit positions
+  elixirMax: 10,
+  elixirRegenRate: 1, // per second
+  tickMs: 60,
+};
+
+// Archetype cards (tasteful names)
+const CARDS = [
+  { id: 'rishi', name: 'Rishi (Vismann)', cost: 3, emoji:'🧘', hp: 120, dmg: 30, speed: 0.6, range: 20, target: 'unit' },
+  { id: 'gaja', name: 'Gaja (Elefant)', cost: 5, emoji:'🐘', hp: 400, dmg: 60, speed: 0.35, range: 18, target: 'tower' },
+  { id: 'garuda', name: 'Garuda (Fugl)', cost: 4, emoji:'🦅', hp: 180, dmg: 35, speed: 0.9, range: 22, target: 'unit' },
+  { id: 'vanara', name: 'Vanara (Ape)', cost: 2, emoji:'🐒', hp: 90, dmg: 20, speed: 1.0, range: 14, target: 'unit' },
+  { id: 'shooter', name: 'Skytte (Bueskytter)', cost: 3, emoji:'🏹', hp: 100, dmg: 24, speed: 0.8, range: 110, target: 'any' },
+];
+
+let state = null;
+
+// DOM refs
+const arena = document.getElementById('arena');
+const unitsLayer = document.getElementById('unitsLayer');
+const cardBar = document.getElementById('cardBar');
+const elixirEl = document.getElementById('elixir');
+const logLines = document.getElementById('logLines');
+const playerTowerHpEl = document.getElementById('playerTowerHp');
+const enemyTowerHpEl = document.getElementById('enemyTowerHp');
+const restartBtn = document.getElementById('restart');
+
+function log(msg){
+  const p = document.createElement('div');
+  p.textContent = `${new Date().toLocaleTimeString()} — ${msg}`;
+  logLines.prepend(p);
+  if(logLines.children.length>20) logLines.removeChild(logLines.lastChild);
+}
+
+function initState(){
+  state = {
+    time:0,
+    elixir: 5,
+    units: [], // {id, faction:'ally'|'enemy', x (0..1), y px, hp, ...}
+    lastCardIndex:0,
+    playerTowerHp:1000,
+    enemyTowerHp:1000,
+    running:true,
+    aiTimer:0
+  };
+  renderCards();
+  updateUi();
+  clearUnits();
+  log('Spillet startet — lykke til!');
+}
+
+function renderCards(){
+  cardBar.innerHTML='';
+  CARDS.forEach((c, idx)=>{
+    const card = document.createElement('div');
+    card.className='card';
+    card.dataset.cardIndex = idx;
+    card.innerHTML = `<div class="emoji">${c.emoji}</div><div class="name">${c.name}</div><div class="cost">${c.cost}</div>`;
+    card.onclick = () => tryDeploy(idx);
+    cardBar.appendChild(card);
+  });
+}
+
+function updateUi(){
+  elixirEl.textContent = Math.floor(state.elixir);
+  playerTowerHpEl.textContent = Math.max(0, Math.floor(state.playerTowerHp));
+  enemyTowerHpEl.textContent = Math.max(0, Math.floor(state.enemyTowerHp));
+  // update card disabled state
+  const cards = cardBar.querySelectorAll('.card');
+  cards.forEach(cEl=>{
+    const idx = Number(cEl.dataset.cardIndex);
+    const card = CARDS[idx];
+    if(card.cost > Math.floor(state.elixir)){
+      cEl.classList.add('locked');
+    } else {
+      cEl.classList.remove('locked');
+    }
+  });
+}
+
+function clearUnits(){
+  unitsLayer.innerHTML='';
+  state.units = [];
+}
+
+function tryDeploy(cardIndex){
+  const card = CARDS[cardIndex];
+  if(card.cost > Math.floor(state.elixir)) return;
+  state.elixir -= card.cost;
+  spawnUnit('ally', card);
+  log(`Du deployet ${card.name}`);
+  updateUi();
+}
+
+function spawnUnit(faction, card){
+  // x is normalized 0 (player left) to 1 (enemy right)
+  const uid = Math.random().toString(36).slice(2,9);
+  const baseX = faction === 'ally' ? 0.08 : 0.92;
+  const y = faction === 'ally' ? arena.clientHeight * 0.65 : arena.clientHeight * 0.35;
+  const unit = {
+    uid, faction, cardId: card.id, name: card.name, emoji: card.emoji,
+    hp: card.hp, maxHp: card.hp, dmg: card.dmg, speed: card.speed,
+    range: card.range, target: card.target,
+    x: baseX, y, width: 60
+  };
+  state.units.push(unit);
+  renderUnit(unit);
+}
+
+function renderUnit(unit){
+  const el = document.createElement('div');
+  el.className = 'unit ' + (unit.faction === 'ally' ? 'ally' : 'enemy');
+  el.dataset.uid = unit.uid;
+  el.style.left = (unit.x*100) + '%';
+  el.style.top = unit.y + 'px';
+  el.innerHTML = `<div class="lbl">${unit.emoji} ${unit.name}</div>
+                  <div class="hpbar"><div class="hpinner" style="width:${(unit.hp/unit.maxHp*100)}%"></div></div>`;
+  unitsLayer.appendChild(el);
+}
+
+function removeUnitByUid(uid){
+  const idx = state.units.findIndex(u=>u.uid===uid);
+  if(idx>=0) state.units.splice(idx,1);
+  const el = unitsLayer.querySelector(`[data-uid="${uid}"]`);
+  if(el) el.remove();
+}
+
+function updateUnitsVisual(){
+  state.units.forEach(u=>{
+    const el = unitsLayer.querySelector(`[data-uid="${u.uid}"]`);
+    if(!el) return;
+    el.style.left = (u.x*100) + '%';
+    el.style.top = u.y + 'px';
+    const hpIn = el.querySelector('.hpinner');
+    if(hpIn) hpIn.style.width = Math.max(0, (u.hp/u.maxHp*100)) + '%';
+  });
+}
+
+// simple collision / attacking logic
+function gameTick(dt){
+  if(!state.running) return;
+  state.time += dt;
+  // elixir regen
+  state.elixir = Math.min(CONFIG.elixirMax, state.elixir + CONFIG.elixirRegenRate * (dt/1000));
+  // AI: spawn roughly every 2-3 seconds
+  state.aiTimer += dt;
+  if(state.aiTimer > 1800 + Math.random()*1200){
+    state.aiTimer = 0;
+    // choose random card affordable or random
+    const idx = Math.floor(Math.random()*CARDS.length);
+    const card = CARDS[idx];
+    if(card.cost <= Math.floor(state.elixir) || Math.random()<0.6){
+      state.elixir = Math.max(0, state.elixir - card.cost);
+      spawnUnit('enemy', card);
+      log(`Fiende deployet ${card.name}`);
+    }
+  }
+
+  // move units and handle interactions
+  const units = state.units;
+  // for each unit find nearest enemy in front
+  for(let u of [...units]){
+    // decide direction based on faction
+    const dir = u.faction === 'ally' ? 1 : -1;
+    // find enemies
+    const enemies = units.filter(o=>o.faction !== u.faction);
+    // find target unit in front within range
+    let target = null;
+    let minDist = Infinity;
+    for(let e of enemies){
+      const dx = (e.x - u.x) * CONFIG.arenaWidth;
+      const dist = Math.abs(dx);
+      if((u.faction==='ally' && dx>0) || (u.faction==='enemy' && dx<0)){
+        if(dist <= u.range){
+          if(dist < minDist){ minDist = dist; target = e; }
+        }
+      }
+    }
+
+    // target towers if no unit target and close enough horizontally
+    let towerTarget = null;
+    if(!target){
+      if(u.faction === 'ally'){
+        const dx = (1 - u.x) * CONFIG.arenaWidth;
+        if(dx <= u.range) towerTarget = 'enemyTower';
+      } else {
+        const dx = u.x * CONFIG.arenaWidth;
+        if(dx <= u.range) towerTarget = 'playerTower';
+      }
+    }
+
+    if(target){
+      // attack target (melee or ranged)
+      // attack slower than tick: simplified: apply damage scaled by dt and speed
+      const hitChance = (dt/1000) * 1.2; // balance factor
+      if(Math.random() < hitChance){
+        target.hp -= u.dmg;
+        // visual hit effect could be added
+      }
+    } else if(towerTarget){
+      // attack tower
+      const hitChance = (dt/1000) * 0.8;
+      if(Math.random() < hitChance){
+        if(towerTarget === 'enemyTower') state.enemyTowerHp -= u.dmg;
+        else state.playerTowerHp -= u.dmg;
+      }
+    } else {
+      // move forward if nothing in range
+      const delta = (u.speed * dir) * (dt/1000) * 0.06; // scaled for visible pace
+      u.x = Math.max(0, Math.min(1, u.x + delta));
+    }
+  }
+
+  // remove dead units
+  for(let u of [...state.units]){
+    if(u.hp <= 0){
+      removeUnitByUid(u.uid);
+      log(`${u.name} falt (utslettet)`);
+    }
+  }
+
+  // remove units that reach past the end (shouldn't happen often)
+  state.units = state.units.filter(u=> u.x> -0.1 && u.x < 1.1);
+
+  // check towers
+  if(state.playerTowerHp <= 0 || state.enemyTowerHp <=0){
+    state.running = false;
+    const winner = state.playerTowerHp <=0 ? 'Fienden' : 'Du';
+    log(`Kamp avsluttet — vinner: ${winner}`);
+    // show message
+    setTimeout(()=>alert(`Kamp ferdig — vinner: ${winner}`), 50);
+  }
+
+  updateUi();
+  updateUnitsVisual();
+}
+
+function gameLoop(){
+  let last = performance.now();
+  function frame(){
+    const now = performance.now();
+    const dt = now - last;
+    last = now;
+    gameTick(dt);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+// attach visual layer update on mutation for new units
+const observer = new MutationObserver(()=>{ /* placeholder */ });
+observer.observe(unitsLayer, {childList:true, subtree:true});
+
+initState();
+gameLoop();
+
+// handle manual spawn by clicking on arena (optional)
+arena.addEventListener('click', (e)=>{
+  // if clicked on unit, do nothing
+});
+
+// restart
+restartBtn.onclick = ()=>{ initState(); };
+
+// responsive: set logical arena width for calculations
+function resizeHandler(){
+  const rect = arena.getBoundingClientRect();
+  CONFIG.arenaWidth = Math.max(800, rect.width);
+}
+window.addEventListener('resize', resizeHandler);
+resizeHandler();
+
+</script>
+</body>
+</html>
